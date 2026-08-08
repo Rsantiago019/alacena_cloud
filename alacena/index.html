@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alacena — Inventario del hogar</title>
+<meta name="description" content="Gestioná el inventario de tu despensa: stock, precios y alertas, en un solo lugar.">
+
+<!-- Tipografías -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<!-- Estilos -->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="light">
+
+<div class="app">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="app-header">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M12 6h16l1.4 6H10.6L12 6Z" fill="var(--color-mustard)"/>
+        <path d="M10 14h20l-1.6 18.4A3 3 0 0 1 25.4 35H14.6a3 3 0 0 1-3-2.6L10 14Z" fill="var(--color-forest)"/>
+        <path d="M14.5 19.5c2 1.4 9 1.4 11 0" stroke="var(--color-paper)" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <h1>Alacena</h1>
+        <p class="tagline">tu despensa, ordenada</p>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <label class="search-field" for="searchInput">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="6.5" stroke="currentColor" stroke-width="1.6"/><path d="M18 18l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar producto…" autocomplete="off">
+      </label>
+
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+      </button>
+
+      <button class="btn btn-primary" id="addProductBtn" type="button">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Nuevo producto</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===================== ALERTAS DE STOCK BAJO ===================== -->
+  <section class="alerts-panel" id="alertsPanel" hidden>
+    <div class="alerts-panel-header">
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 18 17H2L10 2.5Z" stroke="var(--color-clay)" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8v3.4" stroke="var(--color-clay)" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14.2" r="0.9" fill="var(--color-clay)"/></svg>
+      <h2>Stock bajo</h2>
+      <span class="alerts-count" id="alertsCount">0</span>
+      <button class="alerts-notify-btn" id="notifyBtn" type="button">Enviar alerta por correo</button>
+    </div>
+    <div class="alerts-list" id="alertsList"></div>
+  </section>
+
+  <!-- ===================== TOOLBAR: filtros ===================== -->
+  <section class="toolbar">
+    <div class="category-filters" id="categoryFilters">
+      <button class="chip is-active" data-category="todas" type="button">Todas</button>
+    </div>
+    <select class="sort-select" id="sortSelect">
+      <option value="nombre">Ordenar: Nombre</option>
+      <option value="stock">Ordenar: Stock (menor a mayor)</option>
+      <option value="fecha_compra">Ordenar: Compra reciente</option>
+      <option value="precio">Ordenar: Precio</option>
+    </select>
+  </section>
+
+  <!-- ===================== GRID DE PRODUCTOS ===================== -->
+  <main>
+    <div class="loading-state" id="loadingState">
+      <div class="skeleton-card" aria-hidden="true"></div>
+      <div class="skeleton-card" aria-hidden="true"></div>
+      <div class="skeleton-card" aria-hidden="true"></div>
+      <div class="skeleton-card" aria-hidden="true"></div>
+    </div>
+
+    <div class="products-grid" id="productsGrid" hidden></div>
+
+    <div class="empty-state" id="emptyState" hidden>
+      <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="14" y="22" width="36" height="30" rx="3" stroke="currentColor" stroke-width="2"/><path d="M10 22 14 10h36l4 12" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M24 32c5 3.4 11 3.4 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <h3>La alacena está vacía</h3>
+      <p>Agregá tu primer producto para empezar a llevar el control del stock.</p>
+      <button class="btn btn-primary" id="emptyStateAddBtn" type="button">Agregar producto</button>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== MODAL: agregar / editar producto ===================== -->
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal" id="productModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <span class="modal-pin" aria-hidden="true"></span>
+    <header class="modal-header">
+      <h2 id="modalTitle">Nuevo producto</h2>
+      <button class="icon-btn" id="closeModalBtn" type="button" aria-label="Cerrar">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+
+    <form id="productForm">
+      <input type="hidden" id="productId">
+
+      <div class="field">
+        <label for="nombre">Nombre del producto</label>
+        <input type="text" id="nombre" name="nombre" placeholder="Ej: Arroz integral" required>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="categoria">Categoría</label>
+          <select id="categoria" name="categoria" required>
+            <option value="Granos">Granos y cereales</option>
+            <option value="Panadería">Panadería</option>
+            <option value="Carnes">Carnes y fiambres</option>
+            <option value="Lácteos">Lácteos</option>
+            <option value="Bebidas">Bebidas</option>
+            <option value="Limpieza">Limpieza</option>
+            <option value="Condimentos">Condimentos</option>
+            <option value="Otros">Otros</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="unidad">Unidad</label>
+          <select id="unidad" name="unidad" required>
+            <option value="unidades">unidades</option>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="l">litros</option>
+            <option value="ml">ml</option>
+            <option value="paquetes">paquetes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="cantidad">Cantidad actual</label>
+          <input type="number" id="cantidad" name="cantidad" min="0" step="0.1" required>
+        </div>
+        <div class="field">
+          <label for="stockMinimo">Stock mínimo</label>
+          <input type="number" id="stockMinimo" name="stock_minimo" min="0" step="0.1" required>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="precio">Precio unitario</label>
+          <input type="number" id="precio" name="precio" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label for="fechaCompra">Fecha de compra</label>
+          <input type="date" id="fechaCompra" name="fecha_compra">
+        </div>
+      </div>
+
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-ghost" id="cancelBtn">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Guardar producto</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== CONFIRMACIÓN DE BORRADO ===================== -->
+<div class="modal-overlay" id="confirmOverlay" hidden>
+  <div class="confirm-dialog" id="confirmDialog" role="alertdialog" aria-modal="true">
+    <h3 id="confirmTitle">¿Eliminar producto?</h3>
+    <p id="confirmText">Esta acción no se puede deshacer.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" id="confirmCancelBtn" type="button">Cancelar</button>
+      <button class="btn btn-danger" id="confirmDeleteBtn" type="button">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TOAST ===================== -->
+<div class="toast" id="toast" hidden>
+  <span class="toast-icon" id="toastIcon"></span>
+  <span class="toast-message" id="toastMessage"></span>
+</div>
+
+<!-- ===================== SCRIPTS ===================== -->
+<!-- GSAP (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+<!-- App (ES Modules): config -> supabaseClient -> animations -> main -->
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>

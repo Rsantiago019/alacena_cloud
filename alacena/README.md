@@ -17,11 +17,10 @@ alacena/
 │   ├── animations.js                   # Todas las animaciones GSAP (stagger, modales, micro-interacciones)
 │   └── main.js                         # Estado de la app, render de UI, orquestación de eventos
 ├── supabase/
-│   ├── schema.sql                      # Tabla "productos" + RLS + vista de stock bajo
-│   └── functions/
-│       └── low-stock-alert/
-│           └── index.ts                # Edge Function que envía el correo de alerta (Resend)
+│   └── schema.sql                      # Tabla "productos" + RLS + vista de stock bajo
 └── README.md
+
+supabase/functions/low-stock-alert/index.ts  # Edge Function en la raíz del repositorio
 ```
 
 ## 1. Crear el proyecto en Supabase
@@ -41,8 +40,13 @@ Editá `js/config.js` con tus credenciales:
 ```js
 export const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
 export const SUPABASE_ANON_KEY = "TU-ANON-KEY";
-export const ALERT_EMAIL = "tu-correo@ejemplo.com";
 ```
+
+Para esta función usá la clave pública **anon legacy** en formato JWT
+(empieza con `eyJ`), disponible en **Project Settings → API Keys → Legacy
+anon, service_role API keys**. La clave `sb_publishable_...` no es un JWT y
+no funciona con la verificación JWT predeterminada de la Edge Function.
+Nunca uses la clave `service_role` en el frontend.
 
 ## 3. Correr la app localmente
 
@@ -60,36 +64,50 @@ npx serve .
 
 Abrí `http://localhost:5500` (o el puerto que corresponda).
 
-## 4. Desplegar la Edge Function de alertas por correo
+## 4. Desplegar la Edge Function de alertas por Telegram
 
-La función usa [Resend](https://resend.com) para enviar el correo (tiene un
-plan gratuito). También podés adaptarla a SendGrid o Postmark cambiando el
-`fetch` dentro de `index.ts`.
+Creá un bot con [BotFather](https://t.me/BotFather), iniciá una conversación
+con él y obtené el ID del chat. Si el token del bot fue expuesto, revocalo
+con BotFather y generá uno nuevo. No guardes el token en el código ni lo
+compartas.
 
-```bash
-# instalar la CLI de Supabase si no la tenés
-npm install -g supabase
+Desde PowerShell, ubicándote en la **raíz del repositorio** (la carpeta que
+contiene `alacena` y `supabase`), usá la CLI de Supabase:
 
-# login y link al proyecto
+```powershell
 supabase login
 supabase link --project-ref TU-PROJECT-REF
 
-# configurar el secreto con tu API key de Resend
-supabase secrets set RESEND_API_KEY=tu_api_key_de_resend
+# Ingresá los valores reales sin incluirlos en el código fuente.
+$token = Read-Host "Token nuevo del bot de Telegram"
+$chatId = Read-Host "ID del chat de Telegram"
+supabase secrets set "TELEGRAM_BOT_TOKEN=$token" "TELEGRAM_CHAT_ID=$chatId"
+Remove-Variable token, chatId
 
-# desplegar
-supabase functions deploy low-stock-alert
+# --use-api permite desplegar sin Docker.
+supabase functions deploy low-stock-alert --use-api
 ```
 
-Una vez desplegada, el botón **"Enviar alerta por correo"** del panel de
-alertas invoca esta función con la lista de productos en stock bajo.
+Una vez desplegada, el botón **"Enviar alerta por Telegram"** envía la lista
+de productos en stock bajo al chat configurado. Si falla, revisá la consola
+del navegador y los logs de la Edge Function en Supabase.
+
+La app no tiene inicio de sesión y usa una clave pública: cualquiera que
+pueda acceder a ella puede invocar la función y enviar alertas al chat
+configurado. Para exponerla públicamente, agregá autenticación y limitación
+de solicitudes.
 
 ## Funcionalidades incluidas
 
 - **CRUD completo** de productos (nombre, categoría, cantidad, unidad,
   stock mínimo, precio, fecha de compra) contra Supabase.
 - **Detección de stock bajo** (`cantidad <= stock_minimo`) con panel de
-  alertas dedicado y envío de correo vía Edge Function.
+  alertas dedicado y envío por Telegram vía Edge Function.
+- **Resumen del inventario** con cantidad de productos y artículos para
+  reponer, búsqueda, filtros y opción para limpiar filtros sin resultados.
+- **Filtro de reposición** para encontrar rápidamente productos con stock
+  bajo; la búsqueda también funciona sin escribir tildes.
+- **Recuperación de conexión** con opción para reintentar la carga.
 - **Modo claro / oscuro** con variables CSS y persistencia en `localStorage`.
 - **Animaciones GSAP**:
   - Entrada en *stagger* de las tarjetas al cargar o filtrar.

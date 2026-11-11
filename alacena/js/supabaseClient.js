@@ -6,7 +6,6 @@ import {
   SUPABASE_ANON_KEY,
   TABLE_NAME,
   LOW_STOCK_FUNCTION_NAME,
-  ALERT_EMAIL,
 } from "./config.js";
 
 const BASE_URL = SUPABASE_URL.replace(/\/+$/, "");
@@ -141,13 +140,11 @@ export function isLowStock(producto) {
 }
 
 /**
- * Invoca la Edge Function de Supabase que dispara el correo de alerta
- * de stock bajo. Ver supabase/functions/low-stock-alert/index.ts
+ * Invoca la Edge Function que envía la alerta de stock bajo por Telegram.
  */
 export async function triggerLowStockAlert(productosEnAlerta) {
   const result = await supabase.functions.invoke(LOW_STOCK_FUNCTION_NAME, {
     body: {
-      to: ALERT_EMAIL,
       productos: productosEnAlerta.map((p) => ({
         nombre: p.nombre,
         cantidad: p.cantidad,

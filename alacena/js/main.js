@@ -15,8 +15,6 @@ import {
   animateCardsIn,
   animateCardRemove,
   animateStockChange,
-  animateGaugeTo,
-  flashCardAlert,
   openOverlay,
   closeOverlay,
   shakeField,
@@ -46,9 +44,19 @@ const el = {
   grid: document.getElementById("productsGrid"),
   loading: document.getElementById("loadingState"),
   empty: document.getElementById("emptyState"),
+  noResults: document.getElementById("noResults"),
+  errorState: document.getElementById("errorState"),
+  retryBtn: document.getElementById("retryBtn"),
+  clearFiltersBtn: document.getElementById("clearFiltersBtn"),
+  totalProducts: document.getElementById("totalProducts"),
+  lowProducts: document.getElementById("lowProducts"),
+  visibleCount: document.getElementById("visibleCount"),
   categoryFilters: document.getElementById("categoryFilters"),
   sortSelect: document.getElementById("sortSelect"),
   searchInput: document.getElementById("searchInput"),
+  lowStockFilter: document.getElementById("lowStockFilter"),
+  showLowStockBtn: document.getElementById("showLowStockBtn"),
+  inventoryTitle: document.getElementById("inventoryTitle"),
 
   alertsPanel: document.getElementById("alertsPanel"),
   alertsCount: document.getElementById("alertsCount"),
@@ -87,9 +95,14 @@ const state = {
   category: "todas",
   sort: "nombre",
   search: "",
+  lowStockOnly: false,
   editingId: null,
   deleteTargetId: null,
+  pendingStock: new Set(),
+  loaded: false,
 };
+let modalTrigger = null;
+let confirmTrigger = null;
 
 /* --------------------------------------------------------------------
  * Utilidades
@@ -119,6 +132,18 @@ function debounce(fn, wait) {
   };
 }
 
+function normalizeSearch(value) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function setLowStockFilter(active) {
+  state.lowStockOnly = active;
+  for (const button of [el.lowStockFilter, el.showLowStockBtn]) {
+    button.setAttribute("aria-pressed", String(active));
+  }
+  el.lowStockFilter.classList.toggle("is-active", active);
+}
+
 /** Circunferencia y offset del anillo de stock (r = 21). */
 const GAUGE_R = 21;
 const GAUGE_CIRCUMFERENCE = 2 * Math.PI * GAUGE_R;
@@ -144,10 +169,10 @@ function toast(message, type = "success") {
  * Render: filtros de categoría
  * ------------------------------------------------------------------ */
 function renderCategoryFilters() {
-  const chips = ['<button class="chip is-active" data-category="todas" type="button">Todas</button>']
+  const chips = ['<button class="chip is-active" data-category="todas" type="button" aria-pressed="true">Todas</button>']
     .concat(
       CATEGORIES.map(
-        (cat) => `<button class="chip" data-category="${escapeHtml(cat)}" type="button">${escapeHtml(cat)}</button>`
+        (cat) => `<button class="chip" data-category="${escapeHtml(cat)}" type="button" aria-pressed="false">${escapeHtml(cat)}</button>`
       )
     )
     .join("");
@@ -157,7 +182,10 @@ function renderCategoryFilters() {
     const btn = e.target.closest(".chip");
     if (!btn) return;
     state.category = btn.dataset.category;
-    [...el.categoryFilters.children].forEach((c) => c.classList.toggle("is-active", c === btn));
+    [...el.categoryFilters.children].forEach((c) => {
+      c.classList.toggle("is-active", c === btn);
+      c.setAttribute("aria-pressed", String(c === btn));
+    });
     renderGrid();
   });
 }
@@ -173,9 +201,11 @@ function getVisibleProducts() {
   }
 
   if (state.search.trim()) {
-    const q = state.search.trim().toLowerCase();
-    list = list.filter((p) => p.nombre.toLowerCase().includes(q));
+    const q = normalizeSearch(state.search.trim());
+    list = list.filter((p) => normalizeSearch(p.nombre).includes(q));
   }
+
+  if (state.lowStockOnly) list = list.filter(isLowStock);
 
   switch (state.sort) {
     case "stock":
@@ -210,6 +240,7 @@ function buildCard(producto) {
       <div class="card-title-block">
         <span class="card-category">${escapeHtml(producto.categoria)}</span>
         <h3 class="card-title">${escapeHtml(producto.nombre)}</h3>
+        <span class="stock-status">${low ? "Para reponer" : "Stock disponible"}</span>
       </div>
       <div class="stock-gauge">
         <svg viewBox="0 0 48 48">
@@ -232,20 +263,20 @@ function buildCard(producto) {
 
     <div class="card-footer">
       <div class="stock-stepper">
-        <button type="button" class="step-down" aria-label="Restar stock">
+        <button type="button" class="step-down" aria-label="Restar stock de ${escapeHtml(producto.nombre)}" ${state.pendingStock.has(producto.id) || Number(producto.cantidad) <= 0 ? "disabled" : ""}>
           <svg viewBox="0 0 12 12" fill="none"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
         <span class="stepper-value">${Number(producto.cantidad)} ${escapeHtml(producto.unidad)}</span>
-        <button type="button" class="step-up" aria-label="Sumar stock">
+        <button type="button" class="step-up" aria-label="Sumar stock de ${escapeHtml(producto.nombre)}" ${state.pendingStock.has(producto.id) ? "disabled" : ""}>
           <svg viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="card-actions">
         <span class="price-tag">${formatCurrency(producto.precio)}</span>
-        <button type="button" class="edit-btn" aria-label="Editar">
+        <button type="button" class="edit-btn" aria-label="Editar ${escapeHtml(producto.nombre)}" ${state.pendingStock.has(producto.id) ? "disabled" : ""}>
           <svg viewBox="0 0 16 16" fill="none"><path d="M11 2.5 13.5 5 6 12.5 3 13l.5-3L11 2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
         </button>
-        <button type="button" class="delete-btn" aria-label="Eliminar">
+        <button type="button" class="delete-btn" aria-label="Eliminar ${escapeHtml(producto.nombre)}" ${state.pendingStock.has(producto.id) ? "disabled" : ""}>
           <svg viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M4.5 4.5 5 13a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
@@ -264,10 +295,16 @@ function buildCard(producto) {
  * Render de la grilla completa
  * ------------------------------------------------------------------ */
 function renderGrid() {
+  if (!state.loaded) return;
   const visible = getVisibleProducts();
 
   el.grid.innerHTML = "";
   el.loading.hidden = true;
+  el.errorState.hidden = true;
+  el.totalProducts.textContent = state.products.length;
+  el.lowProducts.textContent = state.products.filter(isLowStock).length;
+  el.visibleCount.textContent = `(${visible.length})`;
+  el.noResults.hidden = visible.length > 0 || !state.products.length;
 
   if (!state.products.length) {
     el.grid.hidden = true;
@@ -276,7 +313,7 @@ function renderGrid() {
   }
 
   el.empty.hidden = true;
-  el.grid.hidden = false;
+  el.grid.hidden = visible.length === 0;
 
   const cards = visible.map(buildCard);
   cards.forEach((c) => el.grid.appendChild(c));
@@ -288,6 +325,8 @@ function renderGrid() {
  * ------------------------------------------------------------------ */
 function renderAlertsPanel() {
   const lowStockItems = state.products.filter(isLowStock);
+  el.totalProducts.textContent = state.products.length;
+  el.lowProducts.textContent = lowStockItems.length;
 
   if (!lowStockItems.length) {
     if (!el.alertsPanel.hidden) hideAlertsPanel(el.alertsPanel);
@@ -316,13 +355,17 @@ function renderAlertsPanel() {
  * Carga inicial de productos
  * ------------------------------------------------------------------ */
 async function loadProducts() {
+  el.errorState.hidden = true;
+  el.loading.hidden = false;
   try {
     state.products = await fetchProducts();
+    state.loaded = true;
     renderGrid();
     renderAlertsPanel();
   } catch (err) {
     console.error(err);
     el.loading.hidden = true;
+    el.errorState.hidden = false;
     toast("No se pudo conectar con Supabase. Revisá js/config.js", "error");
   }
 }
@@ -331,6 +374,7 @@ async function loadProducts() {
  * Modal: agregar / editar producto
  * ------------------------------------------------------------------ */
 function openAddModal() {
+  modalTrigger = document.activeElement;
   state.editingId = null;
   el.modalTitle.textContent = "Nuevo producto";
   el.submitBtn.textContent = "Guardar producto";
@@ -343,11 +387,13 @@ function openAddModal() {
   el.confirmOverlay.hidden = true;
   el.modalOverlay.hidden = false;
   openOverlay(el.modalOverlay, el.modal);
+  el.form.nombre.focus();
 }
 
 function openEditModal(id) {
   const producto = state.products.find((p) => p.id === id);
   if (!producto) return;
+  modalTrigger = document.activeElement;
 
   state.editingId = id;
   el.modalTitle.textContent = "Editar producto";
@@ -363,12 +409,15 @@ function openEditModal(id) {
   el.form.fecha_compra.value = producto.fecha_compra ?? "";
 
   openOverlay(el.modalOverlay, el.modal);
+  el.form.nombre.focus();
 }
 
 async function closeProductModal() {
+  if (el.submitBtn.disabled) return;
   await closeOverlay(el.modalOverlay, el.modal);
   state.editingId = null;
   el.modalOverlay.hidden = true;
+  if (modalTrigger?.isConnected) modalTrigger.focus();
 }
 
 function validateForm() {
@@ -380,6 +429,7 @@ function validateForm() {
       shakeField(field.closest(".field"));
     }
   });
+  if (!valid) toast("Completá los campos obligatorios.", "error");
   return valid;
 }
 
@@ -389,6 +439,8 @@ async function handleFormSubmit(e) {
 
   pulseButton(el.submitBtn);
   el.submitBtn.disabled = true;
+  const submitLabel = el.submitBtn.textContent;
+  el.submitBtn.textContent = "Guardando…";
 
   const payload = {
     nombre: el.form.nombre.value.trim(),
@@ -405,6 +457,7 @@ async function handleFormSubmit(e) {
       const updated = await updateProduct(state.editingId, payload);
       const idx = state.products.findIndex((p) => p.id === state.editingId);
       state.products[idx] = updated;
+      el.submitBtn.disabled = false;
       await closeProductModal();
       renderGrid();
       renderAlertsPanel();
@@ -412,6 +465,7 @@ async function handleFormSubmit(e) {
     } else {
       const created = await createProduct(payload);
       state.products.push(created);
+      el.submitBtn.disabled = false;
       await closeProductModal();
       renderGrid();
       renderAlertsPanel();
@@ -422,6 +476,7 @@ async function handleFormSubmit(e) {
     toast("Ocurrió un error al guardar. Intentá de nuevo.", "error");
   } finally {
     el.submitBtn.disabled = false;
+    el.submitBtn.textContent = submitLabel;
   }
 }
 
@@ -431,17 +486,21 @@ async function handleFormSubmit(e) {
 function openDeleteConfirm(id) {
   const producto = state.products.find((p) => p.id === id);
   if (!producto) return;
+  confirmTrigger = document.activeElement;
   state.deleteTargetId = id;
   el.confirmText.textContent = `"${producto.nombre}" se va a eliminar de tu alacena. Esta acción no se puede deshacer.`;
   el.modalOverlay.hidden = true;
   el.confirmOverlay.hidden = false;
   openOverlay(el.confirmOverlay, el.confirmDialog);
+  el.confirmCancelBtn.focus();
 }
 
 async function closeDeleteConfirm() {
+  if (el.confirmDeleteBtn.disabled) return;
   await closeOverlay(el.confirmOverlay, el.confirmDialog);
   state.deleteTargetId = null;
   el.confirmOverlay.hidden = true;
+  if (confirmTrigger?.isConnected) confirmTrigger.focus();
 }
 
 async function handleConfirmDelete() {
@@ -452,12 +511,13 @@ async function handleConfirmDelete() {
   el.confirmDeleteBtn.disabled = true;
 
   try {
+    await deleteProduct(id);
+    el.confirmDeleteBtn.disabled = false;
     await closeDeleteConfirm();
     if (card) await animateCardRemove(card);
-    await deleteProduct(id);
     state.products = state.products.filter((p) => p.id !== id);
     if (card) card.remove();
-    if (!getVisibleProducts().length) renderGrid();
+    renderGrid();
     renderAlertsPanel();
     toast("Producto eliminado");
   } catch (err) {
@@ -473,40 +533,40 @@ async function handleConfirmDelete() {
  * ------------------------------------------------------------------ */
 async function handleStockStep(id, delta) {
   const producto = state.products.find((p) => p.id === id);
-  if (!producto) return;
-
-  const wasLow = isLowStock(producto);
+  if (!producto || state.pendingStock.has(id)) return;
   const step = producto.unidad === "kg" || producto.unidad === "l" ? 0.5 : 1;
   const nuevaCantidad = Math.max(0, Number(producto.cantidad) + delta * step);
-
-  producto.cantidad = nuevaCantidad;
-
+  if (nuevaCantidad === Number(producto.cantidad)) return;
+  state.pendingStock.add(id);
   const card = el.grid.querySelector(`[data-id="${id}"]`);
-  if (card) {
-    card.querySelector(".stepper-value").textContent = `${nuevaCantidad} ${producto.unidad}`;
-    animateStockChange(card, { increased: delta > 0 });
-    const { pct, offset } = gaugeOffsetFor(producto);
-    card.querySelector(".gauge-value").textContent = `${Math.round(pct * 100)}%`;
-    animateGaugeTo(card, offset);
-
-    const nowLow = isLowStock(producto);
-    if (nowLow !== wasLow) {
-      card.classList.toggle("is-low", nowLow);
-      flashCardAlert(card);
-    }
-  }
+  card?.querySelectorAll("button").forEach((button) => { button.disabled = true; });
 
   try {
     await adjustStock(id, nuevaCantidad);
+    producto.cantidad = nuevaCantidad;
+    state.pendingStock.delete(id);
+    renderGrid();
     renderAlertsPanel();
+    const updatedCard = el.grid.querySelector(`[data-id="${id}"]`);
+    if (updatedCard) {
+      animateStockChange(updatedCard, { increased: delta > 0 });
+      updatedCard.querySelector(delta > 0 ? ".step-up" : ".step-down").focus();
+    }
   } catch (err) {
     console.error(err);
     toast("No se pudo actualizar el stock en el servidor.", "error");
+  } finally {
+    state.pendingStock.delete(id);
+    const currentCard = el.grid.querySelector(`[data-id="${id}"]`);
+    if (currentCard && currentCard === card) {
+      currentCard.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+      currentCard.querySelector(".step-down").disabled = Number(producto.cantidad) <= 0;
+    }
   }
 }
 
 /* --------------------------------------------------------------------
- * Enviar alerta de stock bajo (Edge Function -> correo)
+ * Enviar alerta de stock bajo (Edge Function -> Telegram)
  * ------------------------------------------------------------------ */
 async function handleNotifyClick() {
   const lowStockItems = state.products.filter(isLowStock);
@@ -517,13 +577,13 @@ async function handleNotifyClick() {
 
   try {
     await triggerLowStockAlert(lowStockItems);
-    toast("Alerta enviada por correo");
+    toast("Alerta enviada por Telegram");
   } catch (err) {
     console.error(err);
-    toast("No se pudo enviar la alerta (¿desplegaste la Edge Function?)", "error");
+    toast("No se pudo enviar la alerta. Revisá la consola y la configuración de Telegram.", "error");
   } finally {
     el.notifyBtn.disabled = false;
-    el.notifyBtn.textContent = "Enviar alerta por correo";
+    el.notifyBtn.textContent = "Enviar alerta por Telegram";
   }
 }
 
@@ -549,6 +609,38 @@ function handleThemeToggle() {
 function bindEvents() {
   el.addProductBtn.addEventListener("click", openAddModal);
   el.emptyStateAddBtn.addEventListener("click", openAddModal);
+  el.retryBtn.addEventListener("click", loadProducts);
+  el.clearFiltersBtn.addEventListener("click", () => {
+    state.search = "";
+    state.category = "todas";
+    setLowStockFilter(false);
+    el.searchInput.value = "";
+    [...el.categoryFilters.children].forEach((chip) => {
+      const active = chip.dataset.category === "todas";
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", String(active));
+    });
+    el.lowStockFilter.addEventListener("click", () => {
+      setLowStockFilter(!state.lowStockOnly);
+      renderGrid();
+    });
+    el.showLowStockBtn.addEventListener("click", () => {
+      state.search = "";
+      state.category = "todas";
+      el.searchInput.value = "";
+      [...el.categoryFilters.children].forEach((chip) => {
+        const active = chip.dataset.category === "todas";
+        chip.classList.toggle("is-active", active);
+        chip.setAttribute("aria-pressed", String(active));
+      });
+      setLowStockFilter(true);
+      renderGrid();
+      el.lowStockFilter.focus();
+      el.inventoryTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    renderGrid();
+    el.searchInput.focus();
+  });
   el.closeModalBtn.addEventListener("click", closeProductModal);
   el.cancelBtn.addEventListener("click", closeProductModal);
   el.modalOverlay.addEventListener("click", (e) => {
@@ -567,8 +659,8 @@ function bindEvents() {
 
   el.searchInput.addEventListener(
     "input",
-    debounce((e) => {
-      state.search = e.target.value;
+    debounce(() => {
+      state.search = el.searchInput.value;
       renderGrid();
     }, 200)
   );
@@ -579,6 +671,20 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      const dialog = !el.confirmOverlay.hidden ? el.confirmDialog : !el.modalOverlay.hidden ? el.modal : null;
+      if (!dialog) return;
+      const focusable = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled)')];
+      if (!focusable.length) return;
+      if (e.shiftKey && document.activeElement === focusable[0]) {
+        e.preventDefault();
+        focusable[focusable.length - 1].focus();
+      } else if (!e.shiftKey && document.activeElement === focusable[focusable.length - 1]) {
+        e.preventDefault();
+        focusable[0].focus();
+      }
+      return;
+    }
     if (e.key !== "Escape") return;
     if (!el.modalOverlay.hidden) closeProductModal();
     if (!el.confirmOverlay.hidden) closeDeleteConfirm();

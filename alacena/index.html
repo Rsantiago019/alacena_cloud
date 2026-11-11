@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alacena — Inventario del hogar</title>
+<title>Alacena — Tu despensa en orden</title>
 <meta name="description" content="Gestioná el inventario de tu despensa: stock, precios y alertas, en un solo lugar.">
 
 <!-- Tipografías -->
@@ -27,17 +27,12 @@
         <path d="M14.5 19.5c2 1.4 9 1.4 11 0" stroke="var(--color-paper)" stroke-width="1.4" stroke-linecap="round"/>
       </svg>
       <div class="brand-text">
-        <h1>Alacena</h1>
-        <p class="tagline">tu despensa, ordenada</p>
+        <h1>Alacena de casa</h1>
+        <p class="tagline">La despensa, en orden</p>
       </div>
     </div>
 
     <div class="header-controls">
-      <label class="search-field" for="searchInput">
-        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="6.5" stroke="currentColor" stroke-width="1.6"/><path d="M18 18l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <input type="text" id="searchInput" placeholder="Buscar producto…" autocomplete="off">
-      </label>
-
       <button class="icon-btn" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.5v2.6M12 18.9v2.6M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2.5 12h2.6M18.9 12h2.6M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.8 6.8 0 0 0 10.2 10.2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
@@ -50,23 +45,45 @@
     </div>
   </header>
 
+  <section class="overview" aria-labelledby="overviewTitle">
+    <div class="overview-copy">
+      <span class="eyebrow"><span aria-hidden="true">✦</span> TU ESPACIO, MÁS SIMPLE</span>
+      <h2 id="overviewTitle">Todo en su lugar.<br><em>Todo bajo control.</em></h2>
+    </div>
+    <div class="overview-stats" aria-label="Resumen del inventario">
+      <div class="overview-stat"><span class="stat-number" id="totalProducts">—</span><span>productos<br>en tu alacena</span></div>
+      <div class="overview-stat stat-alert"><span class="stat-number" id="lowProducts">—</span><span>productos<br>para reponer</span></div>
+    </div>
+    <div class="overview-decoration" aria-hidden="true">✳</div>
+  </section>
+
   <!-- ===================== ALERTAS DE STOCK BAJO ===================== -->
   <section class="alerts-panel" id="alertsPanel" hidden>
     <div class="alerts-panel-header">
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2.5 18 17H2L10 2.5Z" stroke="var(--color-clay)" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8v3.4" stroke="var(--color-clay)" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="14.2" r="0.9" fill="var(--color-clay)"/></svg>
-      <h2>Stock bajo</h2>
+      <h2>Es momento de reponer</h2>
       <span class="alerts-count" id="alertsCount">0</span>
-      <button class="alerts-notify-btn" id="notifyBtn" type="button">Enviar alerta por correo</button>
+      <button class="alerts-view-btn" id="showLowStockBtn" type="button" aria-pressed="false">Ver productos</button>
+      <button class="alerts-notify-btn" id="notifyBtn" type="button">Enviar alerta por Telegram</button>
     </div>
     <div class="alerts-list" id="alertsList"></div>
   </section>
 
   <!-- ===================== TOOLBAR: filtros ===================== -->
-  <section class="toolbar">
+  <section class="inventory-heading" aria-labelledby="inventoryTitle">
+    <div><span class="section-kicker">TU INVENTARIO</span><h2 id="inventoryTitle">Tu alacena <span id="visibleCount"></span></h2><p>Todo lo que tenés, en un solo lugar.</p></div>
+    <label class="search-field" for="searchInput">
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="9" cy="9" r="6.5" stroke="currentColor" stroke-width="1.6"/><path d="M18 18l-3.8-3.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span class="sr-only">Buscar producto</span>
+      <input type="search" id="searchInput" placeholder="Buscar producto…" autocomplete="off">
+    </label>
+  </section>
+  <section class="toolbar" aria-label="Filtros del inventario">
+    <button class="chip low-stock-filter" id="lowStockFilter" type="button" aria-pressed="false">Solo por reponer</button>
     <div class="category-filters" id="categoryFilters">
       <button class="chip is-active" data-category="todas" type="button">Todas</button>
     </div>
-    <select class="sort-select" id="sortSelect">
+    <select class="sort-select" id="sortSelect" aria-label="Ordenar productos">
       <option value="nombre">Ordenar: Nombre</option>
       <option value="stock">Ordenar: Stock (menor a mayor)</option>
       <option value="fecha_compra">Ordenar: Compra reciente</option>
@@ -92,6 +109,17 @@
       <h3>La alacena está vacía</h3>
       <p>Agregá tu primer producto para empezar a llevar el control del stock.</p>
       <button class="btn btn-primary" id="emptyStateAddBtn" type="button">Agregar producto</button>
+    </div>
+    <div class="empty-state no-results" id="noResults" hidden>
+      <div class="empty-icon" aria-hidden="true">⌕</div>
+      <h3>No encontramos productos</h3>
+      <p>Probá con otro nombre o cambiá la categoría seleccionada.</p>
+      <button class="btn btn-ghost" id="clearFiltersBtn" type="button">Limpiar filtros</button>
+    </div>
+    <div class="empty-state" id="errorState" hidden>
+      <h3>No pudimos cargar tu alacena</h3>
+      <p>Revisá tu conexión e intentá nuevamente.</p>
+      <button class="btn btn-ghost" id="retryBtn" type="button">Volver a intentar</button>
     </div>
   </main>
 </div>
@@ -150,6 +178,7 @@
         <div class="field">
           <label for="stockMinimo">Stock mínimo</label>
           <input type="number" id="stockMinimo" name="stock_minimo" min="0" step="0.1" required>
+          <small>Se mostrará como stock bajo al llegar a esta cantidad. El envío por Telegram es manual.</small>
         </div>
       </div>
 
@@ -174,7 +203,7 @@
 
 <!-- ===================== CONFIRMACIÓN DE BORRADO ===================== -->
 <div class="modal-overlay" id="confirmOverlay" hidden>
-  <div class="confirm-dialog" id="confirmDialog" role="alertdialog" aria-modal="true">
+  <div class="confirm-dialog" id="confirmDialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText">
     <h3 id="confirmTitle">¿Eliminar producto?</h3>
     <p id="confirmText">Esta acción no se puede deshacer.</p>
     <div class="confirm-actions">
@@ -185,7 +214,7 @@
 </div>
 
 <!-- ===================== TOAST ===================== -->
-<div class="toast" id="toast" hidden>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
   <span class="toast-icon" id="toastIcon"></span>
   <span class="toast-message" id="toastMessage"></span>
 </div>

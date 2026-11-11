@@ -15,3 +15,6 @@
 ### 🛠️ Tecnologías Utilizadas
 * **Frontend:** HTML5, CSS3, JavaScript / React *(ajusta según tu stack actual)*
 * **Backend & Base de Datos:** Node.js / Supabase / Firebase
+
+Para configurar y ejecutar la app, incluido el despliegue de alertas por
+Telegram, consultá [alacena/README.md](alacena/README.md).
